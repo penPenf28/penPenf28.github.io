@@ -1,0 +1,438 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>MIT6-824-2021-Lab2-Raft-Part-2B | Hongwen Xin's Blog</title><meta name="author" content="Hongwen Xin"><meta name="copyright" content="Hongwen Xin"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="从本次lab改用了2021版本的实验，后续的内容更加丰富，并对lab 2a的代码进行了重构，放弃了leader candidate follower明确划分的模式  阅读本文前请先仔细阅读Lab 2Part 2B相关实验要求并熟悉基础代码。 本文只提供相关实现思路，希望可以读者由此获得灵感。 2B实验说明  实现leader和follower之间的log entries的插入和更新 保证lead">
+<meta property="og:type" content="article">
+<meta property="og:title" content="MIT6-824-2021-Lab2-Raft-Part-2B">
+<meta property="og:url" content="https://penpenf28.github.io/2023/10/10/MIT6-824-2021-Lab2-Raft-Part-2B/index.html">
+<meta property="og:site_name" content="Hongwen Xin&#39;s Blog">
+<meta property="og:description" content="从本次lab改用了2021版本的实验，后续的内容更加丰富，并对lab 2a的代码进行了重构，放弃了leader candidate follower明确划分的模式  阅读本文前请先仔细阅读Lab 2Part 2B相关实验要求并熟悉基础代码。 本文只提供相关实现思路，希望可以读者由此获得灵感。 2B实验说明  实现leader和follower之间的log entries的插入和更新 保证lead">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://s2.loli.net/2023/10/10/BFrMXAq6oO9PhH7.png">
+<meta property="article:published_time" content="2023-10-10T07:00:45.000Z">
+<meta property="article:modified_time" content="2023-10-10T07:19:59.591Z">
+<meta property="article:author" content="Hongwen Xin">
+<meta property="article:tag" content="MIT6.824">
+<meta property="article:tag" content="Distributed System">
+<meta property="article:tag" content="Go">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://s2.loli.net/2023/10/10/BFrMXAq6oO9PhH7.png"><link rel="shortcut icon" href="/img/my_favicon.png"><link rel="canonical" href="https://penpenf28.github.io/2023/10/10/MIT6-824-2021-Lab2-Raft-Part-2B/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" media="print" onload="this.media='all'"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: undefined,
+  noticeOutdate: undefined,
+  highlight: {"plugin":"highlighjs","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false},
+  copy: {
+    success: '复制成功',
+    error: '复制错误',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  source: {
+    justifiedGallery: {
+      js: 'https://cdn.jsdelivr.net/npm/flickr-justified-gallery/dist/fjGallery.min.js',
+      css: 'https://cdn.jsdelivr.net/npm/flickr-justified-gallery/dist/fjGallery.min.css'
+    }
+  },
+  isPhotoFigcaption: false,
+  islazyload: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: true,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'MIT6-824-2021-Lab2-Raft-Part-2B',
+  isPost: true,
+  isHome: false,
+  isHighlightShrink: false,
+  isToc: true,
+  postUpdate: '2023-10-10 15:19:59'
+}</script><noscript><style type="text/css">
+  #nav {
+    opacity: 1
+  }
+  .justified-gallery img {
+    opacity: 1
+  }
+
+  #recent-posts time,
+  #post-meta time {
+    display: inline !important
+  }
+</style></noscript><script>(win=>{
+    win.saveToLocal = {
+      set: function setWithExpiry(key, value, ttl) {
+        if (ttl === 0) return
+        const now = new Date()
+        const expiryDay = ttl * 86400000
+        const item = {
+          value: value,
+          expiry: now.getTime() + expiryDay,
+        }
+        localStorage.setItem(key, JSON.stringify(item))
+      },
+
+      get: function getWithExpiry(key) {
+        const itemStr = localStorage.getItem(key)
+
+        if (!itemStr) {
+          return undefined
+        }
+        const item = JSON.parse(itemStr)
+        const now = new Date()
+
+        if (now.getTime() > item.expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return item.value
+      }
+    }
+  
+    win.getScript = url => new Promise((resolve, reject) => {
+      const script = document.createElement('script')
+      script.src = url
+      script.async = true
+      script.onerror = reject
+      script.onload = script.onreadystatechange = function() {
+        const loadState = this.readyState
+        if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+        script.onload = script.onreadystatechange = null
+        resolve()
+      }
+      document.head.appendChild(script)
+    })
+  
+    win.getCSS = (url,id = false) => new Promise((resolve, reject) => {
+      const link = document.createElement('link')
+      link.rel = 'stylesheet'
+      link.href = url
+      if (id) link.id = id
+      link.onerror = reject
+      link.onload = link.onreadystatechange = function() {
+        const loadState = this.readyState
+        if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+        link.onload = link.onreadystatechange = null
+        resolve()
+      }
+      document.head.appendChild(link)
+    })
+  
+      win.activateDarkMode = function () {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      win.activateLightMode = function () {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+      const t = saveToLocal.get('theme')
+    
+          if (t === 'dark') activateDarkMode()
+          else if (t === 'light') activateLightMode()
+        
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        if (asideStatus === 'hide') {
+          document.documentElement.classList.add('hide-aside')
+        } else {
+          document.documentElement.classList.remove('hide-aside')
+        }
+      }
+    
+    const detectApple = () => {
+      if(/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)){
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+    })(window)</script><!-- hexo injector head_end start -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.12.0/dist/katex.min.css">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/hexo-math@4.0.0/dist/style.css">
+<!-- hexo injector head_end end --><meta name="generator" content="Hexo 6.3.0"><link rel="alternate" href="/atom.xml" title="Hongwen Xin's Blog" type="application/atom+xml">
+</head><body><div id="web_bg"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img is-center"><img src="https://s2.loli.net/2023/08/25/qk9Z1MsX3yHw6FJ.png" onerror="onerror=null;src='/img/friend_404.gif'" alt="avatar"/></div><div class="sidebar-site-data site-data is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">5</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">6</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">2</div></a></div><hr class="custom-hr"/><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 时间轴</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于我</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url('https://s2.loli.net/2023/10/10/BFrMXAq6oO9PhH7.png')"><nav id="nav"><span id="blog-info"><a href="/" title="Hongwen Xin's Blog"><span class="site-name">Hongwen Xin's Blog</span></a></span><div id="menus"><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 时间轴</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于我</span></a></div></div><div id="toggle-menu"><a class="site-page" href="javascript:void(0);"><i class="fas fa-bars fa-fw"></i></a></div></div></nav><div id="post-info"><h1 class="post-title">MIT6-824-2021-Lab2-Raft-Part-2B</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2023-10-10T07:00:45.000Z" title="发表于 2023-10-10 15:00:45">2023-10-10</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2023-10-10T07:19:59.591Z" title="更新于 2023-10-10 15:19:59">2023-10-10</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/Distributed-System/">Distributed System</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">字数总计:</span><span class="word-count">2.5k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>8分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="MIT6-824-2021-Lab2-Raft-Part-2B"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">阅读量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="post-content" id="article-container"><blockquote>
+<p>从本次lab改用了2021版本的实验，后续的内容更加丰富，并对lab 2a的代码进行了重构，放弃了leader candidate follower明确划分的模式</p>
+</blockquote>
+<p>阅读本文前请先仔细阅读<a href="%5Bhttp://nil.csail.mit.edu/6.824/2021/labs/lab-raft.html%5D">Lab 2</a>Part 2B相关实验要求并熟悉基础代码。<br>
+本文只提供相关实现思路，希望可以读者由此获得灵感。</p>
+<h3 id="2B实验说明">2B实验说明</h3>
+<ul>
+<li>实现leader和follower之间的log entries的插入和更新</li>
+<li>保证leader和follower之间的log一致</li>
+</ul>
+<h3 id="Test分析">Test分析</h3>
+<p>在test构建系统的过程中调用了Make函数，其中applyCh是raft向系统传送msg的通道，用来更新cfg中的各个raft中的logs信息，应用指令(apply)可以看做向applyCh中写入信息。<br>
+后续的test通过检查cfg中的log是否一致来判断编写的程序是否正确。</p>
+<ul>
+<li>cfg.nCommitted(index)返回两个参数，1多少个server认为编号为index的log entry被commited了，2被commited的命令</li>
+<li>cfg.ones()在十秒内遍历全部的server，找到leader并Start（启动一个命令），返回该命令的log index，当前的term和是否是leader，然后检查在2s之内这个命令是否被成功提交给大多数server</li>
+<li>rf.Start()的作用是启动新日志写入</li>
+<li>cfg.crash1(i)直接kill掉对应的server</li>
+<li>cfg.disconnect(i)将第i个server从集群系统中断开连接，但是server本身并没有被kill掉</li>
+<li>在leader接收到超过半数的follower commit了对应的log，leader自身开始apply 对应的log，leader apply后通过心跳再提示follower apply对应的log，log一致性检查在cfg.applier中</li>
+</ul>
+<h3 id="设计概述">设计概述</h3>
+<h4 id="架构图">架构图</h4>
+<p><img src="/2023/10/10/MIT6-824-2021-Lab2-Raft-Part-2B/structure.png" alt="structure" title="structure"></p>
+<h4 id="结构说明">结构说明</h4>
+<ul>
+<li>通过Make在初始化时创建四个后台协程（其实是3+n个，DoReplicate的数量取决于集群中server的数量）
+<ul>
+<li>DoElection负责选举</li>
+<li>DoHeartbeat负责心跳</li>
+<li>DoApply负责向集群apply日志</li>
+<li>DpReplicate负责leader与follower之间的日志同步</li>
+</ul>
+</li>
+<li>日志同步的主要流程
+<ul>
+<li>leader收到客户端指令后(Start)，将指令作为一个新条目（entry）追加到日志中
+<ul>
+<li>一条LogEntry有三个参数：cmd-指令，term-指令的任期号，index-日志号。</li>
+</ul>
+</li>
+<li>leader通过AppendEntries RPC并行的发送日志到follower，当有超过半数的follower回复后(commit)，leader就可以在本地执行该指令(apply)并把结果返回给客户端。</li>
+<li>注意区别commit和apply，commit是指确定日志已经复制到半数节点，而apply是日志应用到状态机，因此可以理解为applyIndex&lt;=commitIndex</li>
+</ul>
+</li>
+</ul>
+<h4 id="分析">分析</h4>
+<p>整个过程中follower可能会和leader无法保持一致如下图所示</p>
+<ul>
+<li><img src="/2023/10/10/MIT6-824-2021-Lab2-Raft-Part-2B/situation.png" alt="situation" title="situation"></li>
+<li>三类原因以及解决方式
+<ul>
+<li>follower由于某些延误没有给leader响应，leader会不断重发追加条目请求（AppendEntries RPC），哪怕leader已经回复了客户端（日志已经apply）</li>
+<li>follower崩溃后恢复，这时Raft追加条目的一致性检查
+<ul>
+<li>一致性检查：leader在每一个发往follower的追加条目RPC中，放入前一个日志条目的索引位置（prevLogIndex）和任期号（prevLogTerm），如果follower在他的日志中找不到前一个日志，follower会拒绝此日志，leader会重新再发送前一个日志，这样逐渐向前定位到follower第一个缺失的日志</li>
+</ul>
+</li>
+<li>leader宕机，崩溃的leader可能复制了日志到部分follower，而新选择的leader可能不具备这些日志，这样导致部分follower中的日志和新leader的日志不相同
+<ul>
+<li>Raft在这种情况下，leader会强制follower复制他的日志来解决不一致的问题</li>
+<li>两者冲突的日志会被新的leader日志覆盖</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><img src="/2023/10/10/MIT6-824-2021-Lab2-Raft-Part-2B/RPC1.png" alt="RPC1" title="RPC1"></li>
+<li>如果leaderCommit&gt;commitIndex，则commitIndex=min(leaderCommit, index of last new entry)</li>
+</ul>
+<p>安全性相关问题</p>
+<ul>
+<li>leader宕机：选举限制
+<ul>
+<li>一个follower落后leader若干日志，但是没有遗漏整个任期</li>
+<li>下次选举中，仍然有可能当选leader，当选新leader后永远无法补上之前缺失的那部分日志，造成状态机之间的不一致</li>
+<li>增加一个限制，确保被选出来的leader一定包含之前各任期内所有被提交的日志条目</li>
+<li>通过RequestVote RPC后俩参数
+<ul>
+<li><img src="/2023/10/10/MIT6-824-2021-Lab2-Raft-Part-2B/RPC2.png" alt="RPC2" title="RPC2"></li>
+<li>如果投票者自己的日志比candidate还新，他会拒绝掉该投票请求</li>
+</ul>
+</li>
+<li>通过比较两份日志中最后一条日志条目的索引和任期号来定义谁的日志比较新</li>
+<li>任期号不同，大的新</li>
+<li>任期号相同，日志长的新</li>
+</ul>
+</li>
+<li>leader宕机：新leader是否提交之前任期内的日志条目
+<ul>
+<li>一旦当前任期内某个日志条目已经存储到过半服务器节点上，leader就知道当前日志可以被提交了</li>
+<li>follower的提交如何被触发？raft中的提交为单点提交
+<ul>
+<li>通过AppendEntries RPC中的leaderCommit 参数，表示leader提交到那个日志了，从而自己也可以应用提交到这个日志</li>
+</ul>
+</li>
+<li>raft永远不会通过计算副本数目的方式来提交之前任期内的日志条目，只有自己任期内的日志才能通过计算副本数目来提交，因为可以确认自己当前的任期号是最大的</li>
+</ul>
+</li>
+<li>follower和candidate宕机
+<ul>
+<li>如果这俩宕机，后续发送给他们的RPC都会失败</li>
+<li>raft通过无限的重试来处理这种失败，如果崩溃的机器重启，那么这些RPC就会成功完成</li>
+</ul>
+</li>
+</ul>
+<p>Test中的Figure 8问题<br>
+解释可以参考<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/369989974">https://zhuanlan.zhihu.com/p/369989974</a><br>
+解决方式</p>
+<ul>
+<li>leader只能够提交自己任期内的log entry，禁止提交非自己任期内的log entry</li>
+</ul>
+<h3 id="实现">实现</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rf *Raft)</span></span> AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply)</span><br></pre></td></tr></table></figure>
+<ul>
+<li>Success = false的情况
+<ul>
+<li>args.Term &lt; rf.term</li>
+<li>log不匹配</li>
+</ul>
+</li>
+<li>流程
+<ul>
+<li>获取锁</li>
+<li>检查args.Term和rf.Term
+<ul>
+<li>如果args.Term &lt; rf.term则失败返回，反之则更新心跳，Term和state</li>
+</ul>
+</li>
+<li>更新term为args.Term，更新state为Follower</li>
+<li>进行日志匹配判定，不匹配则失败返回冲突的index，匹配则进行log合并，持久化</li>
+<li>判定是否需要更新commitIndex
+<ul>
+<li>如果需要更新则使用min(args.LeaderCommit, rf.LogTail().Index)更新，防止日志回滚</li>
+<li>广播apply命令</li>
+</ul>
+</li>
+<li>success = true</li>
+</ul>
+</li>
+</ul>
+<hr>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rf *Raft)</span></span> RequestVote(args *RequestVoteArgs, reply *RequestVoteReply)</span><br></pre></td></tr></table></figure>
+<ul>
+<li>success = false 的情况
+<ul>
+<li>args.Term &lt; rf.term</li>
+<li>投过票了</li>
+<li>args中的日志旧</li>
+</ul>
+</li>
+<li>流程
+<ul>
+<li>获取锁</li>
+<li>检查args.Term和rf.Term
+<ul>
+<li>如果args.Term &lt; rf.term则失败返回</li>
+</ul>
+</li>
+<li>更新term为args.Term，更新state为Follower</li>
+<li>如果检查条件为可以投票（  (没有投过票||投票给同一个人) &amp;&amp; args的日志新  ）
+<ul>
+<li>更新心跳，更新rf.voteFor，更新success，持久化</li>
+</ul>
+</li>
+<li>不可以投票则success=false返回</li>
+</ul>
+</li>
+<li>如何确定args中log新于rf中log
+<ul>
+<li>判断args log尾部entry的Term和rf log尾部entry的Term
+<ul>
+<li>大于则新</li>
+<li>等于则判断尾部的entry Index，大于等于则新</li>
+<li>其余为旧</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<hr>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rf *Raft)</span></span> DoElection()</span><br></pre></td></tr></table></figure>
+<p>在Make阶段创建的后台协程，只要rf没有被kill掉就一直运行<br>
+流程</p>
+<ul>
+<li>获取锁</li>
+<li>判断当前是否是leader，如果是则释放锁continue</li>
+<li>判断接受心跳时间是否超过ElectionTimeout，如果没有，则解锁进行下一次循环</li>
+<li>超时，遍历其他server投票请求投票RPC进行选举
+<ul>
+<li>选举成功（收到成功的回复数 &gt; num of server / 2），更新自身状态为leader，初始化自身nextIndex和matchIndex，并BroadcastHeartbeat广播一次心跳</li>
+<li>完成上述操作后继续Election</li>
+</ul>
+</li>
+</ul>
+<hr>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rf *Raft)</span></span> BroadcastHeartbeat()</span><br></pre></td></tr></table></figure>
+<p>广播心跳</p>
+<ul>
+<li>使用go协程向其他server 进行Replicate操作（复制日志）</li>
+</ul>
+<hr>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rf *Raft)</span></span> Replicate(server <span class="type">int</span>)</span><br></pre></td></tr></table></figure>
+<p>复制日志，主要是获取相关参数，传入Sync进行<br>
+流程</p>
+<ul>
+<li>获取锁</li>
+<li>判断当前状态是否是leader，只有leader才可以进行Replicate操作</li>
+<li>获取当前rf.nextIndex[server]，将位于nextIndex到rf.LogTail之间的logEntry作为参数Entries构建AppendEntriesArgs</li>
+<li>解锁后进行Sync操作</li>
+</ul>
+<hr>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rf *Raft)</span></span> Sync(server <span class="type">int</span>, args *AppendEntriesArgs) </span><br></pre></td></tr></table></figure>
+<p>同步操作，通过sendAppendEntries来实现leader和follower之间的日志同步<br>
+流程</p>
+<ul>
+<li>向server发送sendAppendEntries并获得reply AppendEntriesReply</li>
+<li>获取锁</li>
+<li>判断rf.term 是否等于 args.Term，不相等说明leader已经不是leader，解锁并返回</li>
+<li>判断rf.term和reply.Term，若reply.Term &gt; rf.term，说明leader也已经过期，重设rf的term和state</li>
+<li>reply.Success == true
+<ul>
+<li>len(args.Entries) == 0，说明是发送的是单纯心跳，不用做任何处理直接返回</li>
+<li>获取logTailIndex := LogTail(args.Entries).Index，以此更新nextIndex和matchIndex</li>
+<li>遍历从rf.commitIndex到logTailIndex，找到最大的超过半数节点match的Index，以此Index更新rf.commitIndex，因为只有在大多数节点都复制了日志后，且日志的任期和leader的任期一致，才能提交日志（test中的figure 8）</li>
+<li>当rf.commitIndex &gt; rf.lastApplied时，进行applyCond.Broadcast()，提醒DoApply协程需要进行apply操作了</li>
+</ul>
+</li>
+<li>reply.Success == false
+<ul>
+<li>更新rf.nextIndex 和 rf.matchIndex</li>
+</ul>
+</li>
+</ul>
+<hr>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rf *Raft)</span></span> DoApply(applyCh <span class="keyword">chan</span> ApplyMsg)</span><br></pre></td></tr></table></figure>
+<p>后台协程，用来apply log日志，通过条件变量rf.applyCond来实现协程的唤醒<br>
+流程</p>
+<ul>
+<li>获取rf.applyCond.L.Lock() （在go中，条件变量调用wait方法时必须要持有锁L.Lock()）</li>
+<li>for循环，如果rf kill了则退出并解除相关锁
+<ul>
+<li>判断当前是否需要apply （rf.lastApplied &lt; rf.commitIndex可以认为需要apply）</li>
+<li>如果不需要则调用wait方法休眠</li>
+<li>需要apply，则获取需要apply的log即rf.GetLogAtIndex(rf.lastApplied)，以该log的信息为参数传入到applyCh</li>
+</ul>
+</li>
+</ul>
+<h3 id="测试">测试</h3>
+<p>编写脚本测试500次，全部通过。<br>
+<img src="/2023/10/10/MIT6-824-2021-Lab2-Raft-Part-2B/test.png" alt="test" title="test"></p>
+<h3 id="注意">注意</h3>
+<ul>
+<li>尽量不要简单的将log entry在rf.log中的位置直接作为index，推荐将index单独编入entry结构体中，不然后续的lab 2C 2D会非常痛苦，同理不推荐直接根据entry在log中的位置进行各种操作，可以编写根据logIndex获取对应log entry的函数来进行处理</li>
+<li>需要仔细理解Figure 8的含义，注意在更新commitIndex时日志回滚的问题</li>
+</ul>
+<h3 id="参考内容-致谢">参考内容 &amp;&amp; 致谢</h3>
+<ul>
+<li><a href="%5Bhttps://space.bilibili.com/61981458%5D">戌米的论文笔记</a></li>
+<li><a href="%5Bhttp://nil.csail.mit.edu/6.824/2021/labs/raft-locking.txt%5D">http://nil.csail.mit.edu/6.824/2021/labs/raft-locking.txt</a></li>
+<li><a href="%5Bhttp://nil.csail.mit.edu/6.824/2021/labs/raft-structure.txt%5D">http://nil.csail.mit.edu/6.824/2021/labs/raft-structure.txt</a></li>
+<li><a href="%5Bhttps://thesquareplanet.com/blog/students-guide-to-raft/%5D">https://thesquareplanet.com/blog/students-guide-to-raft/</a></li>
+<li><a href="%5Bhttps://sworduo.github.io/2019/06/04/MIT6-824-lab2-raft/%5D">https://sworduo.github.io/2019/06/04/MIT6-824-lab2-raft/</a></li>
+<li><a href="%5Bhttps://zhuanlan.zhihu.com/p/543989771%5D">https://zhuanlan.zhihu.com/p/543989771</a></li>
+<li><a href="%5Bhttps://zhuanlan.zhihu.com/p/463144886%5D">https://zhuanlan.zhihu.com/p/463144886</a></li>
+<li><a href="%5Bhttps://zhuanlan.zhihu.com/p/369989974%5D">https://zhuanlan.zhihu.com/p/369989974</a></li>
+</ul>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta">文章作者: </span><span class="post-copyright-info"><a href="https://penpenf28.github.io">Hongwen Xin</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta">文章链接: </span><span class="post-copyright-info"><a href="https://penpenf28.github.io/2023/10/10/MIT6-824-2021-Lab2-Raft-Part-2B/">https://penpenf28.github.io/2023/10/10/MIT6-824-2021-Lab2-Raft-Part-2B/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta">版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来自 <a href="https://penpenf28.github.io" target="_blank">Hongwen Xin's Blog</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/MIT6-824/">MIT6.824</a><a class="post-meta__tags" href="/tags/Distributed-System/">Distributed System</a><a class="post-meta__tags" href="/tags/Go/">Go</a></div><div class="post_share"><div class="social-share" data-image="https://s2.loli.net/2023/10/10/BFrMXAq6oO9PhH7.png" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><div class="next-post pull-full"><a href="/2023/08/27/CMU15-445-2023-Spring-Proj1-Buffer-Pool/" title="CMU15-445 2023 Spring Proj1 Buffer Pool"><img class="cover" src="https://s2.loli.net/2023/08/27/iSTBYf8oIsxDgFp.png" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="pagination-info"><div class="label">下一篇</div><div class="next_info">CMU15-445 2023 Spring Proj1 Buffer Pool</div></div></a></div></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><div><a href="/2023/07/10/MIT6-824-2020-Lab1-MapReduce/" title="MIT6.824 2020 Lab1 MapReduce"><img class="cover" src="https://s2.loli.net/2023/08/25/KukRhlxeP3LHc17.png" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2023-07-10</div><div class="title">MIT6.824 2020 Lab1 MapReduce</div></div></a></div><div><a href="/2023/07/21/MIT6-824-2020-Lab2-Raft-Part-2A/" title="MIT6.824 2020 Lab2 Raft Part 2A"><img class="cover" src="https://s2.loli.net/2023/08/25/1GTMw8pVeWNcoFn.png" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2023-07-21</div><div class="title">MIT6.824 2020 Lab2 Raft Part 2A</div></div></a></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info"><div class="is-center"><div class="avatar-img"><img src="https://s2.loli.net/2023/08/25/qk9Z1MsX3yHw6FJ.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info__name">Hongwen Xin</div><div class="author-info__description"></div></div><div class="card-info-data site-data is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">5</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">6</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">2</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/penPenf28"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons is-center"><a class="social-icon" href="mailto:penpenf28@163.com" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">This is my Blog</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#2B%E5%AE%9E%E9%AA%8C%E8%AF%B4%E6%98%8E"><span class="toc-number">1.</span> <span class="toc-text">2B实验说明</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Test%E5%88%86%E6%9E%90"><span class="toc-number">2.</span> <span class="toc-text">Test分析</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%BE%E8%AE%A1%E6%A6%82%E8%BF%B0"><span class="toc-number">3.</span> <span class="toc-text">设计概述</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E5%9B%BE"><span class="toc-number">3.1.</span> <span class="toc-text">架构图</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%BB%93%E6%9E%84%E8%AF%B4%E6%98%8E"><span class="toc-number">3.2.</span> <span class="toc-text">结构说明</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%88%86%E6%9E%90"><span class="toc-number">3.3.</span> <span class="toc-text">分析</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0"><span class="toc-number">4.</span> <span class="toc-text">实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B5%8B%E8%AF%95"><span class="toc-number">5.</span> <span class="toc-text">测试</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B3%A8%E6%84%8F"><span class="toc-number">6.</span> <span class="toc-text">注意</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%82%E8%80%83%E5%86%85%E5%AE%B9-%E8%87%B4%E8%B0%A2"><span class="toc-number">7.</span> <span class="toc-text">参考内容 &amp;&amp; 致谢</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/2023/10/10/MIT6-824-2021-Lab2-Raft-Part-2B/" title="MIT6-824-2021-Lab2-Raft-Part-2B"><img src="https://s2.loli.net/2023/10/10/BFrMXAq6oO9PhH7.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="MIT6-824-2021-Lab2-Raft-Part-2B"/></a><div class="content"><a class="title" href="/2023/10/10/MIT6-824-2021-Lab2-Raft-Part-2B/" title="MIT6-824-2021-Lab2-Raft-Part-2B">MIT6-824-2021-Lab2-Raft-Part-2B</a><time datetime="2023-10-10T07:00:45.000Z" title="发表于 2023-10-10 15:00:45">2023-10-10</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2023/08/27/CMU15-445-2023-Spring-Proj1-Buffer-Pool/" title="CMU15-445 2023 Spring Proj1 Buffer Pool"><img src="https://s2.loli.net/2023/08/27/iSTBYf8oIsxDgFp.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="CMU15-445 2023 Spring Proj1 Buffer Pool"/></a><div class="content"><a class="title" href="/2023/08/27/CMU15-445-2023-Spring-Proj1-Buffer-Pool/" title="CMU15-445 2023 Spring Proj1 Buffer Pool">CMU15-445 2023 Spring Proj1 Buffer Pool</a><time datetime="2023-08-27T10:18:26.000Z" title="发表于 2023-08-27 18:18:26">2023-08-27</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2023/08/25/CMU15-445-2023-Spring-Proj0-C-Primer/" title="CMU15-445 2023 Spring Proj0 C++ Primer"><img src="https://s2.loli.net/2023/08/27/EeysnhQ5mMAaRbo.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="CMU15-445 2023 Spring Proj0 C++ Primer"/></a><div class="content"><a class="title" href="/2023/08/25/CMU15-445-2023-Spring-Proj0-C-Primer/" title="CMU15-445 2023 Spring Proj0 C++ Primer">CMU15-445 2023 Spring Proj0 C++ Primer</a><time datetime="2023-08-24T16:32:23.000Z" title="发表于 2023-08-25 00:32:23">2023-08-25</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2023/07/21/MIT6-824-2020-Lab2-Raft-Part-2A/" title="MIT6.824 2020 Lab2 Raft Part 2A"><img src="https://s2.loli.net/2023/08/25/1GTMw8pVeWNcoFn.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="MIT6.824 2020 Lab2 Raft Part 2A"/></a><div class="content"><a class="title" href="/2023/07/21/MIT6-824-2020-Lab2-Raft-Part-2A/" title="MIT6.824 2020 Lab2 Raft Part 2A">MIT6.824 2020 Lab2 Raft Part 2A</a><time datetime="2023-07-21T12:25:54.000Z" title="发表于 2023-07-21 20:25:54">2023-07-21</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2023/07/10/MIT6-824-2020-Lab1-MapReduce/" title="MIT6.824 2020 Lab1 MapReduce"><img src="https://s2.loli.net/2023/08/25/KukRhlxeP3LHc17.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="MIT6.824 2020 Lab1 MapReduce"/></a><div class="content"><a class="title" href="/2023/07/10/MIT6-824-2020-Lab1-MapReduce/" title="MIT6.824 2020 Lab1 MapReduce">MIT6.824 2020 Lab1 MapReduce</a><time datetime="2023-07-10T10:13:53.000Z" title="发表于 2023-07-10 18:13:53">2023-07-10</time></div></div></div></div></div></div></main><footer id="footer" style="background-image: url('/img/bottom_compressed.jpg')"><div id="footer-wrap"><div class="copyright">&copy;2023 By Hongwen Xin</div><div class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly</a></div><div class="footer_custom_text">Hi, :)</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="浅色和深色模式转换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside_config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.umd.min.js"></script><div class="js-pjax"></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
