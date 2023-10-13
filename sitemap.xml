@@ -2,6 +2,15 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
+    <loc>https://penpenf28.github.io/2023/10/13/Git%E5%B8%B8%E8%A7%81%E5%91%BD%E4%BB%A4-%E6%B5%81%E7%A8%8B/</loc>
+    
+    <lastmod>2023-10-13</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
     <loc>https://penpenf28.github.io/2023/10/10/MIT6-824-2021-Lab2-Raft-Part-2B/</loc>
     
     <lastmod>2023-10-12</lastmod>
@@ -94,7 +103,7 @@
 
   <url>
     <loc>https://penpenf28.github.io/</loc>
-    <lastmod>2023-10-12</lastmod>
+    <lastmod>2023-10-13</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
@@ -102,42 +111,49 @@
   
   <url>
     <loc>https://penpenf28.github.io/tags/CMU15-445/</loc>
-    <lastmod>2023-10-12</lastmod>
+    <lastmod>2023-10-13</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://penpenf28.github.io/tags/Database/</loc>
-    <lastmod>2023-10-12</lastmod>
+    <lastmod>2023-10-13</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://penpenf28.github.io/tags/C/</loc>
-    <lastmod>2023-10-12</lastmod>
+    <lastmod>2023-10-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>https://penpenf28.github.io/tags/Git/</loc>
+    <lastmod>2023-10-13</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://penpenf28.github.io/tags/MIT6-824/</loc>
-    <lastmod>2023-10-12</lastmod>
+    <lastmod>2023-10-13</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://penpenf28.github.io/tags/Distributed-System/</loc>
-    <lastmod>2023-10-12</lastmod>
+    <lastmod>2023-10-13</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://penpenf28.github.io/tags/Go/</loc>
-    <lastmod>2023-10-12</lastmod>
+    <lastmod>2023-10-13</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
@@ -146,14 +162,21 @@
   
   <url>
     <loc>https://penpenf28.github.io/categories/Database/</loc>
-    <lastmod>2023-10-12</lastmod>
+    <lastmod>2023-10-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>https://penpenf28.github.io/categories/Note/</loc>
+    <lastmod>2023-10-13</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://penpenf28.github.io/categories/Distributed-System/</loc>
-    <lastmod>2023-10-12</lastmod>
+    <lastmod>2023-10-13</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>

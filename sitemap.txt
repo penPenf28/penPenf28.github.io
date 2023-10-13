@@ -1,3 +1,4 @@
+https://penpenf28.github.io/2023/10/13/Git%E5%B8%B8%E8%A7%81%E5%91%BD%E4%BB%A4-%E6%B5%81%E7%A8%8B/
 https://penpenf28.github.io/2023/10/10/MIT6-824-2021-Lab2-Raft-Part-2B/
 https://penpenf28.github.io/2023/10/12/MIT6-824-2021-Lab2-Raft-Part-2C-2D/
 https://penpenf28.github.io/2023/07/21/MIT6-824-2020-Lab2-Raft-Part-2A/
@@ -12,8 +13,10 @@ https://penpenf28.github.io/
 https://penpenf28.github.io/tags/CMU15-445/
 https://penpenf28.github.io/tags/Database/
 https://penpenf28.github.io/tags/C/
+https://penpenf28.github.io/tags/Git/
 https://penpenf28.github.io/tags/MIT6-824/
 https://penpenf28.github.io/tags/Distributed-System/
 https://penpenf28.github.io/tags/Go/
 https://penpenf28.github.io/categories/Database/
+https://penpenf28.github.io/categories/Note/
 https://penpenf28.github.io/categories/Distributed-System/
