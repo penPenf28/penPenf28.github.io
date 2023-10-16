@@ -149,6 +149,13 @@
   </url>
   
   <url>
+    <loc>https://penpenf28.github.io/tags/Note/</loc>
+    <lastmod>2023-10-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
     <loc>https://penpenf28.github.io/tags/MIT6-824/</loc>
     <lastmod>2023-10-16</lastmod>
     <changefreq>weekly</changefreq>
@@ -170,7 +177,7 @@
   </url>
   
   <url>
-    <loc>https://penpenf28.github.io/tags/Note/</loc>
+    <loc>https://penpenf28.github.io/tags/Graph-Neural-Network/</loc>
     <lastmod>2023-10-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
@@ -178,13 +185,6 @@
   
   <url>
     <loc>https://penpenf28.github.io/tags/Transformer/</loc>
-    <lastmod>2023-10-16</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.2</priority>
-  </url>
-  
-  <url>
-    <loc>https://penpenf28.github.io/tags/Graph-Neural-Network/</loc>
     <lastmod>2023-10-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
@@ -200,14 +200,14 @@
   </url>
   
   <url>
-    <loc>https://penpenf28.github.io/categories/Distributed-System/</loc>
+    <loc>https://penpenf28.github.io/categories/Git/</loc>
     <lastmod>2023-10-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
-    <loc>https://penpenf28.github.io/categories/Git/</loc>
+    <loc>https://penpenf28.github.io/categories/Distributed-System/</loc>
     <lastmod>2023-10-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
