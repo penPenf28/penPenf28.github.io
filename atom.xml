@@ -6,7 +6,7 @@
   <link href="https://penpenf28.github.io/atom.xml" rel="self"/>
   
   <link href="https://penpenf28.github.io/"/>
-  <updated>2023-10-17T01:05:23.439Z</updated>
+  <updated>2023-10-19T02:56:23.913Z</updated>
   <id>https://penpenf28.github.io/</id>
   
   <author>
@@ -15,6 +15,36 @@
   </author>
   
   <generator uri="https://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>MIT6-824-2021-Lab3-KV-Raft</title>
+    <link href="https://penpenf28.github.io/2023/10/19/MIT6-824-2021-Lab3-KV-Raft/"/>
+    <id>https://penpenf28.github.io/2023/10/19/MIT6-824-2021-Lab3-KV-Raft/</id>
+    <published>2023-10-19T02:41:53.000Z</published>
+    <updated>2023-10-19T02:56:23.913Z</updated>
+    
+    <content type="html"><![CDATA[<p>阅读本文前请先仔细阅读<a href="http://nil.csail.mit.edu/6.824/2021/labs/lab-kvraft.html">Lab 3</a>相关实验要求并熟悉基础代码。<br>本文只提供相关实现思路，希望可以读者由此获得灵感。</p><h1>Part 3A</h1><h2 id="实验说明">实验说明</h2><ul><li>使用在lab2中编写的Raft实现fault-tolerant key-value DB集群</li><li>整个服务分为Clerk端和Server端，在Clerk端发出请求，在Server端处理请求并同步，再将结果返回给Clerk端</li><li>需要完成的请求<ul><li>key value均为string类型</li><li>Get(key): 由Clerk调用，获取Server数据库中key值对应的value</li><li>Put(key, value): 由Clerk调用，将key-value键值对添加到Server数据库中，如果原来存在key键值对，则用新的覆盖旧的</li><li>Append(key, value): 由Clerk调用，将value添加到Server数据库对应key中，可以理解为字符串的拼接</li></ul></li><li>在请求的基础上，结合lab2实现的Raft来完成多台Clerk的linearizability(线性一致性)<ul><li>什么是linearizability？</li><li>图像来自于<a href="https://anishathalye.com/testing-distributed-systems-for-linearizability/">博客</a></li><li><img src="/2023/10/19/MIT6-824-2021-Lab3-KV-Raft/1.png" alt="1" title="1"></li><li><img src="/2023/10/19/MIT6-824-2021-Lab3-KV-Raft/2.png" alt="2" title="2"></li><li>上面给出两张图像，横轴代表时间，纵轴代表Client</li><li>第一张图满足linearizability，而第二张图不满足linearizability</li><li>观察Get的结果，Client 4 Get返回0，Client 3 Get返回1，则按照图一橙色线作为操作完成的时间点即(linearization point)，可以得到正确的结果，而图二无论怎么切割都无法使得先Get 1后Get 0</li></ul></li><li><a href="https://github.com/wuYin/blog/blob/master/distributed_systems/raft-lab3A-fault-tolerant-kv-service.md">Test分析</a><ul><li><strong>TestBasic3A</strong>：正常情况下，保证单个 Client 命令能执行成功，保证 5 台 KVServer 日志一致。</li><li><strong>TestUnreliable3A</strong>：处理 RPC 调用超时，重试请求。</li><li><strong>TestOnePartition3A</strong>：处理多台 Client 和多台 Server 都发生网络分区的情况。</li><li><strong>TestPersistPartitionUnreliableLinearizable3A</strong>：在节点失效、网络不可靠的环境中保证线性一致性。</li></ul></li></ul><h2 id="设计概述">设计概述</h2><p><a href="http://nil.csail.mit.edu/6.824/2021/notes/raft_diagram.pdf">官方diagram</a>，个人感觉不是特别清晰，根据自己的实现重新画了一个简化版本的<br><img src="/2023/10/19/MIT6-824-2021-Lab3-KV-Raft/3.png" alt="3" title="3"><br><img src="/2023/10/19/MIT6-824-2021-Lab3-KV-Raft/4.png" alt="4" title="4"><br><img src="/2023/10/19/MIT6-824-2021-Lab3-KV-Raft/5.png" alt="5" title="5"></p><h3 id="Clerk">Clerk</h3><ul><li>Clerk自身参数除了默认的servers，还需要定义自身的Clerk id(cid)和当前系统中的leader id</li><li>Clerk负责向对应的KV-Server传递Command信息，传递过程使用RPC进行通信，因此需要定义一些RPC请求回复变量<ul><li>对于Get方法，需要传递给KV-Server的只有key，返回信息则是key对应的value</li><li>对于Put和Append方法，合并为PutAppend方法，传递的参数除了key，value外，还需要Clerk id和Request id（用来唯一定义这条Command）</li></ul></li></ul><h3 id="KV-Server">KV-Server</h3><ul><li>Make时创建一个后台协程DoApply，一直监听Raft系统向自己传输的需要apply的Command<ul><li>注意，并不是监听Clerk向自己发送的Command！！！<ul><li>因为在Clerk向自身KV-Server发送相关Command时，Server本身是作为一个信息转发站，将Command信息先发送到Raft服务中，让集群中各个节点完成同步，集群同步后再通过管道将需要apply的Command发送到Server进行实际的apply</li></ul></li></ul></li></ul><h3 id="整体流程">整体流程</h3><ul><li>首先通过各类Make方法构建整个系统<ul><li>对于Client，通过rand方法生成自己的cid</li></ul></li><li>用户操作客户端Clerk发起命令，以Put(key, value)为例<ul><li>1 找到leader，并将参数通过RPC传递给leader对应KV-Server的PutAppend方法</li><li>2 该KV-Server使用管道将传递进来的参数继续传递给Raft系统，等待系统完成大多数commit并向KV-Server发送需要apply的Command（已经在lab2中完成），并为这个Command创建一个channel(Command Index -&gt; channel 的映射)，通过DoApply向这个channel发送信息来判断是否apply成功<ul><li>如果等待超时，回到第一步</li><li>从管道中成功接收到信息，说明这条Command已经成功apply到KV系统中</li></ul></li><li>3 KV-Server配置RPC reply信息并返回success</li><li>4 Clerk收到RPC的回复信息，并返回</li></ul></li><li>Server通过DoApply协程监听Raft系统向自己传输的需要apply的Command<ul><li>从管道接收到需要apply的Command(以Put为例)，如果Command valid，则更新kv.kv( kv.kv[args.Key] = args.Value )，并向刚才创建的channel发送成功的信息，证明已经完成了这条Command的apply</li><li>继续循环监听kv.applyCh</li></ul></li></ul><h3 id="Fault-tolerance">Fault-tolerance</h3><ul><li>Raft相关fault已经在Lab 2中妥善处理，主要关注KV-Server的fault<ul><li>Server直接宕机(Lab 3B中使用Snapshot处理)</li><li>Clerk和Server之间的RPC丢失问题(下面栗子来源于<a href="https://zhuanlan.zhihu.com/p/568777696">十一的博客</a>)</li></ul></li></ul><ol><li>Client 向 Server 发送 Append(x, 1) 的请求</li><li>Server 成功接收，Raft 层达成共识，应用至状态机。此时状态机状态 {x: 1}</li><li>由于网络原因，Server 向 Client 返回的结果丢失</li><li>Client 苦苦等待，也没有收到 Server 返回的结果，于是超时重试。绕了一圈后又回到了这个 Server (此 Server 仍为 Leader)</li><li>Client 又向 Server 发送 Append(x, 1) 的请求，Server 成功接收，Raft 层达成共识，应用至状态机。此时状态机状态 {x: 11}</li><li>这次 Server 成功向 Client 返回了结果。</li><li>Client 成功收到了返回的结果，结束请求。然而原本的 Append(x, 1) 请求，造成了 Append(x, 11) 的后果。</li></ol><p>出现上述问题的原因是Raft允许相同的command 传递给Server进行apply多次，因此我们需要在Server的服务中对传输的command去重。<br><strong>方案</strong><br>在Server中添加一个映射map kv.clc (means client latest command)，所有Client对应的最新的一次操作，即Client -&gt; Command的映射，在Server apply之前查看当前Client的上一次执行的最新命令是否和这次的相同，如果相同，说明是重复的命令，无需执行，这样可以避免命令apply多次的问题，用这种方式完成一定的Fault-tolerance。</p><h2 id="注意">注意</h2><p>对于Clerk</p><ul><li>ReTry间隔设置为300毫秒</li><li>没有用到Lock</li><li>注意当前leader失效的情况，如果失效，我采用的是逐个寻找的方法</li></ul><p>对于Server</p><ul><li>也需要注意当前leader失效的情况，需要判断Server apply命令后leader是否发生变化</li><li>在操作map映射时需要注意Lock的使用，对于kv.kv即存储的键值对，个人没有使用Lock，因为每个Server都保存者自己的数据，没有竞争</li></ul><h1>Part 3B</h1><h2 id="实验说明-2">实验说明</h2><ul><li>在3A中，Client Operation通过leader同步到其他的follwer中，同步过程使用Raft维护数据的一致性，随着Client Operation的增多，每个Server和对应的Raft服务不可能无休止的存储数据(kv.kv rf.log)，因此需要Snapshot（快照）来压缩使用空间</li><li>如果之前Lab 2的Snapshot做到完备实现的话，3B是比较简单的</li></ul><h2 id="设计概述-2">设计概述</h2><ul><li>Raft的Snapshot已经在Lab 2中完成，但是还需要KV-Server传输相关数据保存至snapshot</li><li>Client操作不涉及Snapshot</li><li>对于KV-Server需要保存什么？<ul><li>生成快照时的数据库</li><li>3A中为了fault-tolerance所设置的map映射，即kv.clc，所有Client对应的最新的一次操作，避免Command的重复apply</li></ul></li><li>什么时候需要生成Snapshot？<ul><li>DoApply一直在监听Raft传来的Command，当传来的Command合法，执行完成后发现kv.rf.GetStateSize() &gt;= kv.maxraftstate &amp;&amp; kv.maxraftstate != -1时，就需要进行Raft的Snapshot，调用Snapshot时不要忘记添加KV-Server需要保存的数据</li></ul></li><li>什么时候需要安装Snapshot？<ul><li>DoApply一直在监听Raft传来的Command，当传来的Command不合法时，说明当前Server缺少内容，这时就需要CondInstallSnapshot进行Snapshot的安装</li></ul></li></ul><p><img src="/2023/10/19/MIT6-824-2021-Lab3-KV-Raft/6.png" alt="6" title="6"></p><h2 id="注意-2">注意</h2><ul><li>KV-Server的在初始化时需要readSnapshot，确保如果Server之前宕机的话可以恢复之前的状态</li></ul><h1>总结</h1><ul><li>Lab 3A在Lab 2的基础上完成了一个异步Fault-tolerant Key-Value数据库，依靠底层 Raft 算法在节点崩溃重启甚至不可用、网络延迟丢包甚至分区的环境下，依旧对多个Client 保证数据的线性一致性</li><li>Lab 3B则实现了实时监测Raft状态信息，阶段生成快照，当发现自身缺失信息时则安装快照，维持了数据的一致性</li><li>关于fault-tolerance，3A中利用一个映射保存Client和他上一次最新apply的命令来保证不会重复提交的问题，3B则是利用Snapshot进行Server的恢复，避免了机器宕机后造成的数据不一致问题</li><li>Test时可能遇到超时的问题，考虑一下在Lab 2中Lock是否合理使用，不合理的Lock可能会导致争用异常激烈</li></ul><h1>参考内容 &amp;&amp; 致谢</h1><ul><li><a href="http://nil.csail.mit.edu/6.824/2021/papers/raft-extended.pdf">raft论文</a> Sec 7 &amp;&amp; 8</li><li><a href="https://github.com/wuYin/blog/blob/master/distributed_systems/raft-lab3A-fault-tolerant-kv-service.md">wuYin的Github1</a></li><li><a href="https://github.com/wuYin/blog/blob/master/distributed_systems/raft-lab3B-kv-service-log-compaction.md">wuYin的Github1</a></li><li><a href="https://sworduo.github.io/2019/06/21/MIT6-824-lab3-kvservice/">sworduo的博客</a></li><li><a href="https://zhuanlan.zhihu.com/p/568777696">十一的博客</a></li><li><a href="https://zhuanlan.zhihu.com/p/463146084">谭新宇的博客</a></li></ul>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;p&gt;阅读本文前请先仔细阅读&lt;a href=&quot;http://nil.csail.mit.edu/6.824/2021/labs/lab-kvraft.html&quot;&gt;Lab 3&lt;/a&gt;相关实验要求并熟悉基础代码。&lt;br&gt;
+本文只提供相关实现思路，希望可以读者由此获得灵感。&lt;/p&gt;
+&lt;</summary>
+      
+    
+    
+    
+    <category term="Distributed System" scheme="https://penpenf28.github.io/categories/Distributed-System/"/>
+    
+    
+    <category term="MIT6.824" scheme="https://penpenf28.github.io/tags/MIT6-824/"/>
+    
+    <category term="Distributed System" scheme="https://penpenf28.github.io/tags/Distributed-System/"/>
+    
+    <category term="Go" scheme="https://penpenf28.github.io/tags/Go/"/>
+    
+  </entry>
   
   <entry>
     <title>图神经网络极简总结</title>
