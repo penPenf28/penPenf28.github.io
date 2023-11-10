@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
+    <loc>https://penpenf28.github.io/2023/11/10/MIT6-824-2021-Lab4-Sharded-KV-Service/</loc>
+    <lastmod>2023-11-10</lastmod>
+  </url>
+  <url>
     <loc>https://penpenf28.github.io/2023/11/06/GPU%E7%9B%B8%E5%85%B3/</loc>
     <lastmod>2023-11-07</lastmod>
   </url>

@@ -1,0 +1,481 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>MIT6.824 2021 Lab4 Sharded KV Service | Hongwen Xin's Blog</title><meta name="author" content="Hongwen Xin"><meta name="copyright" content="Hongwen Xin"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="阅读本文前请先仔细阅读Lab 4相关实验要求并熟悉基础代码。  shard，即分片，一个shard是存储的kv键值对的一个子集，比如将所有开头字母为&quot;a&quot;的key value键值对映射作为一个shard 好处是可以在处理replica时，如果多次操作不同的shard可以并行处理，增加系统的吞吐量 在lab2和lab3中构建了一个异步Fault-tolerant KV数据库，实现">
+<meta property="og:type" content="article">
+<meta property="og:title" content="MIT6.824 2021 Lab4 Sharded KV Service">
+<meta property="og:url" content="https://penpenf28.github.io/2023/11/10/MIT6-824-2021-Lab4-Sharded-KV-Service/index.html">
+<meta property="og:site_name" content="Hongwen Xin&#39;s Blog">
+<meta property="og:description" content="阅读本文前请先仔细阅读Lab 4相关实验要求并熟悉基础代码。  shard，即分片，一个shard是存储的kv键值对的一个子集，比如将所有开头字母为&quot;a&quot;的key value键值对映射作为一个shard 好处是可以在处理replica时，如果多次操作不同的shard可以并行处理，增加系统的吞吐量 在lab2和lab3中构建了一个异步Fault-tolerant KV数据库，实现">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://s2.loli.net/2023/11/10/Xeo13Lbj6wGyxfI.png">
+<meta property="article:published_time" content="2023-11-10T03:09:09.000Z">
+<meta property="article:modified_time" content="2023-11-10T03:27:59.801Z">
+<meta property="article:author" content="Hongwen Xin">
+<meta property="article:tag" content="MIT6.824">
+<meta property="article:tag" content="Distributed System">
+<meta property="article:tag" content="Go">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://s2.loli.net/2023/11/10/Xeo13Lbj6wGyxfI.png"><link rel="shortcut icon" href="/img/my_favicon.png"><link rel="canonical" href="https://penpenf28.github.io/2023/11/10/MIT6-824-2021-Lab4-Sharded-KV-Service/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><meta name="google-site-verification" content="_kVaZ0wG8vQrrkc5xlMuryIqwFhPkvNrtzZ2IFeNid4"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" media="print" onload="this.media='all'"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: undefined,
+  noticeOutdate: undefined,
+  highlight: {"plugin":"highlighjs","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false},
+  copy: {
+    success: '复制成功',
+    error: '复制错误',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  source: {
+    justifiedGallery: {
+      js: 'https://cdn.jsdelivr.net/npm/flickr-justified-gallery/dist/fjGallery.min.js',
+      css: 'https://cdn.jsdelivr.net/npm/flickr-justified-gallery/dist/fjGallery.min.css'
+    }
+  },
+  isPhotoFigcaption: false,
+  islazyload: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: true,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'MIT6.824 2021 Lab4 Sharded KV Service',
+  isPost: true,
+  isHome: false,
+  isHighlightShrink: false,
+  isToc: true,
+  postUpdate: '2023-11-10 11:27:59'
+}</script><noscript><style type="text/css">
+  #nav {
+    opacity: 1
+  }
+  .justified-gallery img {
+    opacity: 1
+  }
+
+  #recent-posts time,
+  #post-meta time {
+    display: inline !important
+  }
+</style></noscript><script>(win=>{
+    win.saveToLocal = {
+      set: function setWithExpiry(key, value, ttl) {
+        if (ttl === 0) return
+        const now = new Date()
+        const expiryDay = ttl * 86400000
+        const item = {
+          value: value,
+          expiry: now.getTime() + expiryDay,
+        }
+        localStorage.setItem(key, JSON.stringify(item))
+      },
+
+      get: function getWithExpiry(key) {
+        const itemStr = localStorage.getItem(key)
+
+        if (!itemStr) {
+          return undefined
+        }
+        const item = JSON.parse(itemStr)
+        const now = new Date()
+
+        if (now.getTime() > item.expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return item.value
+      }
+    }
+  
+    win.getScript = url => new Promise((resolve, reject) => {
+      const script = document.createElement('script')
+      script.src = url
+      script.async = true
+      script.onerror = reject
+      script.onload = script.onreadystatechange = function() {
+        const loadState = this.readyState
+        if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+        script.onload = script.onreadystatechange = null
+        resolve()
+      }
+      document.head.appendChild(script)
+    })
+  
+    win.getCSS = (url,id = false) => new Promise((resolve, reject) => {
+      const link = document.createElement('link')
+      link.rel = 'stylesheet'
+      link.href = url
+      if (id) link.id = id
+      link.onerror = reject
+      link.onload = link.onreadystatechange = function() {
+        const loadState = this.readyState
+        if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+        link.onload = link.onreadystatechange = null
+        resolve()
+      }
+      document.head.appendChild(link)
+    })
+  
+      win.activateDarkMode = function () {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      win.activateLightMode = function () {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+      const t = saveToLocal.get('theme')
+    
+          if (t === 'dark') activateDarkMode()
+          else if (t === 'light') activateLightMode()
+        
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        if (asideStatus === 'hide') {
+          document.documentElement.classList.add('hide-aside')
+        } else {
+          document.documentElement.classList.remove('hide-aside')
+        }
+      }
+    
+    const detectApple = () => {
+      if(/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)){
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+    })(window)</script><!-- hexo injector head_end start -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.12.0/dist/katex.min.css">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/hexo-math@4.0.0/dist/style.css">
+<!-- hexo injector head_end end --><meta name="generator" content="Hexo 6.3.0"><link rel="alternate" href="/atom.xml" title="Hongwen Xin's Blog" type="application/atom+xml">
+</head><body><div id="web_bg"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img is-center"><img src="https://s2.loli.net/2023/08/25/qk9Z1MsX3yHw6FJ.png" onerror="onerror=null;src='/img/friend_404.gif'" alt="avatar"/></div><div class="sidebar-site-data site-data is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">13</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">9</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><hr class="custom-hr"/><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 时间轴</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于我</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url('https://s2.loli.net/2023/11/10/Xeo13Lbj6wGyxfI.png')"><nav id="nav"><span id="blog-info"><a href="/" title="Hongwen Xin's Blog"><span class="site-name">Hongwen Xin's Blog</span></a></span><div id="menus"><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 时间轴</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于我</span></a></div></div><div id="toggle-menu"><a class="site-page" href="javascript:void(0);"><i class="fas fa-bars fa-fw"></i></a></div></div></nav><div id="post-info"><h1 class="post-title">MIT6.824 2021 Lab4 Sharded KV Service</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2023-11-10T03:09:09.000Z" title="发表于 2023-11-10 11:09:09">2023-11-10</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2023-11-10T03:27:59.801Z" title="更新于 2023-11-10 11:27:59">2023-11-10</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/Distributed-System/">Distributed System</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">字数总计:</span><span class="word-count">5.1k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>17分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="MIT6.824 2021 Lab4 Sharded KV Service"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">阅读量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="post-content" id="article-container"><p>阅读本文前请先仔细阅读<a target="_blank" rel="noopener" href="http://nil.csail.mit.edu/6.824/2021/labs/lab-shard.html">Lab 4</a>相关实验要求并熟悉基础代码。</p>
+<ul>
+<li>shard，即分片，一个shard是存储的kv键值对的一个子集，比如将所有开头字母为&quot;a&quot;的key value键值对映射作为一个shard</li>
+<li>好处是可以在处理replica时，如果多次操作不同的shard可以并行处理，增加系统的吞吐量</li>
+<li>在lab2和lab3中构建了一个异步Fault-tolerant KV数据库，实现了多节点之间的数据一致性，但是所有请求需要通过leader来处理，随着数据处理量越来越大，单一leader已经很难处理这种负载，因此在lab4中需要采用这种shard的方法，将数据按照某种方式分开存储到不同的集群上(group)，降低单一集群的压力</li>
+<li>lab4采用shard方法进行数据的划分，将不同数据划分到不同的shard上(shard之间不相交且并集为全集)，再将各个shard分配到集群(groups)中，同一个阶段这样的shard与groups的对应关系称为一个配置(config)</li>
+<li>随着时间的推移和数据的增加，shard需要在各个group之间进行迁移，lab4的主要挑战是在config更新和shard迁移的同时，保证提供对外的强一致性服务</li>
+<li>每个group中都有一个leader</li>
+<li>一个集群只有leader才可以提供服务，lab3完成的是单个集群，而lab4完成的是多个集群协同工作</li>
+<li>参考实现与代码来自于<a target="_blank" rel="noopener" href="https://ray-eldath.me/programming/deep-dive-in-6824/">大佬</a>，非常感谢</li>
+<li>简易的整体结构图</li>
+</ul>
+<p><img src="/2023/11/10/MIT6-824-2021-Lab4-Sharded-KV-Service/1.png" alt="1" title="1"></p>
+<h1>Part 4A</h1>
+<h2 id="实验说明">实验说明</h2>
+<ul>
+<li>Part A我们只需要完成ShardCtrl部分，这一部分是用来提供高可用的集群配置管理服务</li>
+<li>ShardCtrl中保存着一组config，操作最新的config（Tail），每个config记录了每一个shard(分片)分配到了哪一个group(集群)和每一个group里都有哪些server</li>
+<li>需要实现下面的操作
+<ul>
+<li>Move：将分片shard分配给gid的group</li>
+<li>Join：新加入一组group，并平衡整体的shard与group的分配</li>
+<li>Leave：移除groups，同时保持shard与group的平衡</li>
+<li>Query：查询最新的config信息，即shard与group的映射</li>
+</ul>
+</li>
+</ul>
+<h2 id="设计概述">设计概述</h2>
+<h3 id="Move">Move</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 将Shard shard迁移到Group gid中</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(ck *Clerk)</span></span> Move(shard <span class="type">int</span>, gid <span class="type">int</span>);</span><br></pre></td></tr></table></figure>
+<p>流程</p>
+<ul>
+<li>Clerk调用Move，配置好参数后通过RPC传递给ShardCtrl Server执行</li>
+<li>ShardCtrl Server收到Move命令后继续配置参数，并传递给Raft做group内的日志同步
+<ul>
+<li>ShardCtrl Server在创建时会运行一个DoApply后台协程，当Raft服务完成日志同步并将命令commit时，DoApply协程会将该命令Apply</li>
+</ul>
+</li>
+<li>Apply操作首先新建一个config，并复制最新的配置（Tail Config）给新建的config，再对该config进行操作，最后把该config添加到configs组的尾部作为最新的config
+<ul>
+<li>conf.Shards[cmd.Shard] = cmd.GID</li>
+</ul>
+</li>
+</ul>
+<h3 id="Join">Join</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 将一些group添加到系统config中</span></span><br><span class="line"><span class="comment">// group可能有新的可能有旧的</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(ck *Clerk)</span></span> Join(servers <span class="keyword">map</span>[<span class="type">int</span>][]<span class="type">string</span>);</span><br></pre></td></tr></table></figure>
+<p>流程</p>
+<ul>
+<li>Apply之前的流程和Move相同</li>
+<li>Apply操作
+<ul>
+<li>新建一个config，并复制最新的配置（Tail Config）给新建的config</li>
+<li>将参数servers复制给config的Groups，即gid -&gt; servers[]的映射</li>
+<li>由于加入了一些新的group，整体系统中shard可能会分配不均匀，影响某些group的性能，因此需要rebalance(重新分配shard)，该操作后续介绍</li>
+<li>在rebalance完成后将操作的config加入到configs组的尾部作为最新的config</li>
+</ul>
+</li>
+</ul>
+<h3 id="Leave">Leave</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 将gids中的group从config中删除</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(ck *Clerk)</span></span> Leave(gids []<span class="type">int</span>);</span><br></pre></td></tr></table></figure>
+<p>流程</p>
+<ul>
+<li>Apply之前的流程和Move相同</li>
+<li>Apply操作
+<ul>
+<li>新建一个config，并复制最新的配置（Tail Config）给新建的config</li>
+<li>遍历config中的shard，如果发现有分配给gids中的group，则取消分配（conf.Shards[need_redistribute] = 0）</li>
+<li>删除conf.Groups中的 存在于gids中的group</li>
+<li>进行rebalance</li>
+<li>在rebalance完成后将操作的config加入到configs组的尾部作为最新的config</li>
+</ul>
+</li>
+</ul>
+<h3 id="Rebalance">Rebalance</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(sc *ShardCtrler)</span></span> rebalance(conf *Config);</span><br></pre></td></tr></table></figure>
+<p>流程</p>
+<ul>
+<li>对传入的config进行重新分配资源（重新分配Shards）</li>
+<li>将所有现存的组号提取为一个数组并从小到大进行排序，保存在gs []int中</li>
+<li>将当前Shards中保存的shard -&gt; group的关系进行反转，即遍历conf.Shards，反转关系为group -&gt; shards，并将数据保存在ct中
+<ul>
+<li>ct := map[int][]int{0: {}} // gid -&gt; shard[]</li>
+</ul>
+</li>
+<li>for循环，直到ct中group所含shards的最大值和最小值的差值&lt;=1退出循环
+<ul>
+<li>获取包含最多shard和最少shard的两个group，将差值一半的shard分别给两个group</li>
+<li>更新conf.Shards信息</li>
+</ul>
+</li>
+</ul>
+<h3 id="Query">Query</h3>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(ck *Clerk)</span></span> Query(num <span class="type">int</span>) Config;</span><br></pre></td></tr></table></figure>
+<p>流程</p>
+<ul>
+<li>整体流程和前述Move，Join，Leave略有不同</li>
+<li>Clerk调用Move，配置好参数后通过RPC传递给ShardCtrl Server执行</li>
+<li>ShardCtrl Server收到Query命令后无需传递给Raft进行日志同步，返回最新的config作为参数通过RPC传递回Clerk即可</li>
+</ul>
+<h2 id="Code-Details">Code Details</h2>
+<ul>
+<li>注册自定义RPC struct
+<ul>
+<li>需要在初始化时使用labgod进行注册，否则可能会出现结构体nil错误</li>
+</ul>
+</li>
+<li>注意初始化map和channel</li>
+<li>如果当前需要Apply的Command的Index小于ShardCtrl的lastApplied，说明这条Command已经过期，直接返回</li>
+<li>如何避免Command重复执行的问题？
+<ul>
+<li>同Lab 3中的方法，使用一个dedup映射，保存每一个Client上一次执行的最新命令，同时在Clerk向Server传递参数时，配置变量RequestId，用来唯一确定这条命令
+<ul>
+<li>dedup  map[int64]interface{}</li>
+</ul>
+</li>
+<li>在Raft层提交Command给应用层Apply时，判断这条Command是否被执行过，如果这条Command相同，并且RequestId也相同，可以确定是条重复命令，无需执行直接返回即可</li>
+</ul>
+</li>
+<li>执行完Move，Join，Leave后需要保存command到dedup中，并更新ShardCtrl的lastApplied</li>
+</ul>
+<h1>Part 4B</h1>
+<h2 id="实验说明-2">实验说明</h2>
+<ul>
+<li>Part 4A的ShardCtrl完成了配置更新，shard rebalance等任务，而Part 4B需要完成所有shard的读写任务，并保证在同一集群内的数据同步</li>
+<li>相比于Lab3提供的基础读写服务，本次Lab还需要进行配置更新，shard迁移，shard数据清理，空日志监测等任务</li>
+</ul>
+<h2 id="设计概述-2">设计概述</h2>
+<p>整体流程</p>
+<ul>
+<li>配置需要传入group的参数（操作类型，ClientId，num，key-value等）</li>
+<li>使用key2shard(key string)，找到当前key被分配到了哪一个shard</li>
+<li>根据shard从conf.Shards中获取group id</li>
+<li>在group中循环寻找该group的leader，找到leader后调用对应命令(Put/Get/Append)的RPC，直到返回请求成功或遍历整个group</li>
+<li>最后Query最新的配置</li>
+</ul>
+<h3 id="Clerk">Clerk</h3>
+<p>Clerk部分较为简单，只需要实现Put/Get/Append三个操作，且流程相似，基础代码都已经给出，只需要添加一些RPC参数设置即可。<br>
+在Clerk中添加一个num成员变量（SequenceNum），作为参数传递给Shard KV Server，保存在Shard KV Server的dedup映射中，原理同Lab4A，用来唯一标记当前执行Command，每当调用一次 Put/Get/Append 就自增。在Shard KV Server中通过ClientId -&gt; SequenceNum的映射dedup进行Command去重。</p>
+<h3 id="Server">Server</h3>
+<p>由于需要对Shard进行迁移操作，为Shard设置了三个状态</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> (</span><br><span class="line">	Serving ShardState = <span class="literal">iota</span></span><br><span class="line">	Pulling</span><br><span class="line">	Pushing</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<p>只有在Shard处于Serving状态下，才能对该shard进行Get/Put/Append操作。<br>
+Pulling状态说明该Shard还未到位，正在等待从其他Group中拉取。<br>
+Pushing状态说明该shard需要handoff给其他Group。<br>
+同时为了保证系统的异步性，设置了三个后台协程：</p>
+<ul>
+<li><strong>DoApply</strong>
+<ul>
+<li>功能和Lab 2 Lab 3中的DoApply协程相同，监听从Raft层传来的需要apply的Command
+<ul>
+<li>如果传来Command的类型是Config则更新配置
+<ul>
+<li>遍历旧配置中的shard与gid的映射
+<ul>
+<li>如果shard对应的gid等于自己所在的group，且新配置中的shard对应的gid不等于自己所在的group，说明需要将shard迁移到别的group，因此将该ShardState置为Pushing状态，并将shard加入到handoff[]数组中，准备作为参数传递给需要接受的group</li>
+<li>如果shard对应的gid不等于自己所在的group，且新配置中的shard对应的gid等于自己所在的group，说明需要将该shard从其他group迁移过来，因此将该ShardState置为Pulling状态</li>
+</ul>
+</li>
+<li>执行handoff（只有leader才可以执行）
+<ul>
+<li>向handoff管道中发送需要移动给其他group的shard（handoff[]数组）（其他group只能由leader接受）</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>如果传来Command的类型为其他
+<ul>
+<li>Get类型：确保key所对应的shard处于serving状态，返回key对应的value</li>
+<li>PutAppend类型：确保key所对应的shard处于serving状态，判断该Command是否重复后进行Put/Append操作，并更新dedup映射</li>
+<li>Handoff类型：这类型的命令是用来接收其他group传递给自身server的shard(key-value键值对)。首先判断该Command是否重复，判断该版本号是否一致，遍历Shards确定是否所有的shard都处于serving状态，如果都处于serving状态，无需更新直接返回，如果不是，则将传入参数的kv数据库添加到group原有的kv数据库中，接着将全部shard更新为serving，最后更新dedup映射和SequenceNum，避免重复执行相关命令</li>
+<li>HandoffDone类型：这类型的命令是判断自己之前发出的Handoff命令是否完成。判断该Command的版本号是否和当前一致，不一致直接返回，一致的情况下，说明之前执行的Handoff命令已经成功完成，因此可以删除掉已经移交的Keys，并将对应的Shards的状态设置为serving</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>DoUpdateConfig</strong>
+<ul>
+<li>每隔一段UpdateConfigInterval时间，使用Query查询（ShardCtrl）拉取新的Config，如果拉取到新的Config，则将其传入Raft层中提交日志并进行同步，以此更新每个机器上的Config</li>
+<li>只有在Group中每个Shard都处于Serving状态时才能进行config的拉取</li>
+</ul>
+</li>
+<li><strong>DoPollHandoff</strong>
+<ul>
+<li>这个协程的作用是用来协调各个group之间的handoff RPC，共两类
+<ul>
+<li>sendHandoff RPC，由发送方调用，发送方为需要进行handoff的group中的server，发送给目的group中的leader</li>
+<li>sendHandoffDone RPC，由目的group中的leader调用，再完成Raft同步并apply后，调用此RPC向原group中的leader发送已经完成Handoff的信息</li>
+</ul>
+</li>
+<li>持续监听自身handoff管道，即在DoApply中传送的数据，接收到数据说明需要将自身的一些shard传递给其他的group</li>
+<li>遍历需要传送数据的group，配置好参数后调用sendHandoff RPC对Group中的leader进行handoff（shard迁移）
+<ul>
+<li>leader收到handoff RPC后，解析参数，传递给Raft层进行同步，同步完成后交给DoApply协程进行Command分析并apply</li>
+<li>如果apply成功，则配置HandoffDone参数，调用sendHandoffDone RPC，传递回给发起Handoff的Group，原Group收到HandoffDone参数后传递给Raft层同步，同步完成后交给DoApply协程进行Command分析并Apply</li>
+</ul>
+</li>
+<li>如果遍历完后并没有找到可以发送RPC的server，等待UpdateConfigPollInterval后继续轮询group进行遍历</li>
+</ul>
+</li>
+</ul>
+<h3 id="Snapshot">Snapshot</h3>
+<p>Snapshot的过程发生在DoApply中，当执行完一条命令发现kv.rf.GetStateSize() &gt;= kv.maxraftstate时，调用rf.Snapshot()进行快照。<br>
+同样在DoApply中，发现传入的命令是Snapshot，则调用rf.CondInstallSnapshot()进行Raft服务层的Snapshot安装，如果安装成功，则进行KV Server的Snapshot安装。</p>
+<h1>Challenge</h1>
+<p>这部分实现更多讲解和细节可以参考原大佬的<a target="_blank" rel="noopener" href="https://ray-eldath.me/programming/deep-dive-in-6824/">文章</a>，做了部分搬运。<br>
+在上面的设计中已经包含Challenge的部分实现，此处做进一步说明。</p>
+<h2 id="Garbage-collection-of-state">Garbage collection of state</h2>
+<p>要求是实现失效分片清理&amp;&amp;垃圾回收。<br>
+这一部分通过前面提到的Handoff相关RPC实现，DoPollHandoff中已经介绍了sendHandoff RPC和sendHandoffDone RPC，在收到sendHandoffDone RPC时，说明自身向其他Group发送的shard已经被成功接受了，直接delete掉移交的key(shard)即可，并将对应的shard状态修改为serving。</p>
+<h2 id="Client-requests-during-configuration-changes">Client requests during configuration changes</h2>
+<p>要求是在config发生变化时不阻塞Client的执行，即异步变更配置的shardkv。<br>
+Lab 4的初始要求是实现一个分片的分布式数据库，当配置发生变化时（即shard -&gt; gid的映射变化），集群需要创建新的配置，原先负责这个shard的group不再负责这个shard，将shard迁移到新group后由新group负责，在迁移(Handoff)的过程中，不能接受客户端的请求。<br>
+直观实现是同步实现，即使用一个后台协程，这个协程定期更新配置，并计算配置变更，如果发现配置变更，则停止所有客户端请求和整个DoApply，移交切片并更新配置，等到所有切片准备完成后，才恢复客户端请求和DoApply协程。<br>
+这种方式效率十分低下，原因有如下两条</p>
+<ul>
+<li>一个group可能会负责多个切片，当配置变更时，需要移交的切片可能只是一部分切片，如果客户端想要对未影响的shard进行操作，还需要等待整个handoff的完成
+<ul>
+<li>例子：由config1{ group1[shard2 shard3] group2[shard1 shard4 shard5] } -&gt; config2{ group1[shard2 shard1 shard4] group2[shard3 shard5]}</li>
+<li>这个配置变更只影响了group1的shard3和group2的shard1 shard4，在handoff过程中，如果想操作shard2，则需要等待handoff的完成，效率十分低下</li>
+</ul>
+</li>
+<li>一次配置的变更可能需要来自不同组的多个切片，而我们需要在一个切片完成handoff后可以立即执行客户端的操作，无需等待
+<ul>
+<li>还是上面的例子，在group1收到shard1后，客户端想要对shard1进行操作，必须要等到剩下的shard4进行handoff后才能操作，效率低下，我们需要让单个shard移交成功后立即就可以执行客户端命令</li>
+</ul>
+</li>
+</ul>
+<p>因此，需要完成<strong>配置更新</strong>，<strong>分片移交</strong>，<strong>分片恢复</strong>三个阶段的全异步化。</p>
+<ul>
+<li>当检测到配置更新时，仅仅停止需要同步的切片，不能阻塞客户端请求和DoApply循环</li>
+<li>移交单个Shard后需要立即恢复对该Shard的服务</li>
+</ul>
+<p>常见的同步方法有拉切片，即系统检测到配置更新时，由新被分配的某个切片的组向切片所在原组去Pull(拉取)切片，<a target="_blank" rel="noopener" href="https://ray-eldath.me/programming/deep-dive-in-6824/">博客</a>采用了推切片的方法，与拉切片相反，当系统检测到配置更新时，由需要移交shard的组向需要接收shard的groups Push(推送)切片。<br>
+流程（大部分已经在前面介绍）</p>
+<ul>
+<li>更新配置，这一流程对应结构图中的DoUpdateConfig
+<ul>
+<li>leader定期拉取最新的配置，发现拉取配置的Num比本地配置大且所有分片都处于serving状态，调用Raft层的Start</li>
+<li>Raft层同步完成并提交最新配置给server 进行apply，server需要计算出需要移交的分片，并更新分片的状态，将需要移交的分片进行handoff（传递到handoffCh管道中，以此实现异步）</li>
+</ul>
+</li>
+<li>移交分片
+<ul>
+<li>通过DoPollHandoff，将各个group中handoffCh的数据提取并转发（通过RPC）</li>
+<li>接收到handoff RPC的组的leader调用Start，成功后向原组发送handoffDone消息（通过RPC）</li>
+<li>每个节点的DoApply收到handoff的消息后，根据参数更新自己的kv database</li>
+</ul>
+</li>
+<li>分片恢复
+<ul>
+<li>当原组的leader收到handoffDone消息后，调用Raft Start进行同步</li>
+<li>Raft同步完成交给server apply时，server清理对应的key(Challenge 1)，并将分片恢复为正常状态serving，为下一轮reconfiguration作准备。</li>
+</ul>
+</li>
+</ul>
+<h4 id="Q1-分片状态">Q1 分片状态</h4>
+<p>除了Config中的Shard-&gt;Gid的映射关系，还需要给每个Shard设置当前状态，这里设计采用了三个状态，分别为Serving，Pushing，Pulling，采用一个额外的ShardState数组进行设置。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> ShardKV <span class="keyword">struct</span> &#123;</span><br><span class="line">    <span class="comment">// ... </span></span><br><span class="line">    config       Config</span><br><span class="line">    shardStates [shardctrler.NShards]ShardState</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> ShardState <span class="type">int</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">const</span> (</span><br><span class="line">    Serving ShardState = <span class="literal">iota</span></span><br><span class="line">    Pulling</span><br><span class="line">    Pushing</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<h4 id="Q2-RPC消息">Q2 RPC消息</h4>
+<p>两种RPC消息，Handoff RPC和HandoffDone RPC，只用一种RPC是不能处理发送RPC节点宕机的情况，可以参考问题场景部分。</p>
+<h4 id="Q3-持久化">Q3 持久化</h4>
+<p>Snapshot的过程发生在DoApply中，当执行完一条命令发现kv.rf.GetStateSize() &gt;= kv.maxraftstate时，调用rf.Snapshot()进行快照。<br>
+同样在DoApply中，发现传入的命令是Snapshot类型，则调用rf.CondInstallSnapshot()进行Raft服务层的Snapshot安装，如果安装成功，则进行KV Server的Snapshot安装。</p>
+<h4 id="问题场景">问题场景</h4>
+<p><strong>P1</strong><br>
+<img src="/2023/11/10/MIT6-824-2021-Lab4-Sharded-KV-Service/2.png" alt="2" title="2"><br>
+组100中某节点发起移交，随后该节点宕机，接收组完成更新后返回完成消息，由于原节点已经宕机，导致他无法向Raft发送移交完成的消息，造成死锁。<br>
+方法<br>
+前面提到的不能使用一种RPC的原因，本质上是一个节点需要对某个RPC回复进行Raft共识时，回复可能会被网络延迟太久以至于回复到达时已经不是leader了，无法调用Start。<br>
+因此可以使用多对RPC，实现中采用了两对，即HandoffDone的发送方group101会找到group100中的leader进行发送。<br>
+<strong>P2</strong><br>
+<img src="/2023/11/10/MIT6-824-2021-Lab4-Sharded-KV-Service/3.png" alt="3" title="3"><br>
+组100向组101移交 [a, b] shard，随后该节点宕机，group101完成了更新并开始服务，已经有客户端开始请求a shard了，这时由于发送移交的节点宕机了，原组没有收到回复，新选举了leader重新发起移交，这时可能会出现应用已经移交过的config，造成状态回退。<br>
+方法<br>
+进行Handoff命令的去重即可，首先检查Handoff的Shard的状态，确保传输的shard都处于pushing状态，同时检查Handoff的Num是否处于最新状态。<br>
+<strong>P3</strong><br>
+<img src="/2023/11/10/MIT6-824-2021-Lab4-Sharded-KV-Service/4.png" alt="4" title="4"><br>
+组100的某节点rf.Start(config)后宕机，恢复后开始并不是leader，因此从Raft层传来的需要apply的Config并不会触发handoff，从而丢失一次reconfiguration。<br>
+方法<br>
+在DoUpdateConfig中执行rf.Start(config)时，对config添加一个committer参数，当收到Raft层传来的需要apply的Config信息时，如果这个committer和本节点的编号匹配，则无视本节点可能不是leader，进行handoff操作。</p>
+<h4 id="Command去重">Command去重</h4>
+<p>使用 SequeceNum 对消息进行去重（客户端的每个请求都要带 ClientId 和递增的 SequenceNum，且仅在服务器返回 OK 时递增 SequenceNum），使用 SequenceNum 机制去重请求，那么客户端必须只有一个 goroutine 访问 SequenceNum 这个状态（不能存在并发）。如果是 Clerk 这很容易做到，但是对于移交分片的服务器到服务器通信则需要额外的机制。<a target="_blank" rel="noopener" href="https://ray-eldath.me/programming/deep-dive-in-6824/">博客</a>使用了一个 handoffCh 通道和的一个常驻的 goroutine 协程来保证这点。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(kv *ShardKV)</span></span> DoPollHandoff() &#123;</span><br><span class="line">    <span class="keyword">for</span> handoff := <span class="keyword">range</span> kv.handoffCh &#123;</span><br><span class="line">        handoff.args.Args = Args&#123;ClientId: kv.cid, SequenceNum: kv.num&#125;</span><br><span class="line">    nextHandoff:</span><br><span class="line">        <span class="keyword">for</span> &#123;</span><br><span class="line">            <span class="keyword">for</span> _, si := <span class="keyword">range</span> handoff.servers &#123;</span><br><span class="line">                <span class="keyword">var</span> reply HandoffReply</span><br><span class="line">                ok := kv.sendHandoff(si, &amp;handoff.args, &amp;reply)</span><br><span class="line">                <span class="keyword">if</span> ok &amp;&amp; reply.Err == OK &#123;</span><br><span class="line">                    kv.num++</span><br><span class="line">                    <span class="keyword">break</span> nextHandoff</span><br><span class="line">                &#125;</span><br><span class="line">                <span class="keyword">if</span> ok &amp;&amp; reply.Err == ErrWrongGroup &#123; <span class="built_in">panic</span>(<span class="string">&quot;handoff reply.Err == ErrWrongGroup&quot;</span>) &#125;</span><br><span class="line">            &#125;</span><br><span class="line">            time.Sleep(UpdateConfigPollInterval)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里的handoffCh需要进行buffered，buffer大小为NShards。</p>
+<h2 id="LeaseRead-with-noop">LeaseRead with noop</h2>
+<p>这一部分完全参考<a target="_blank" rel="noopener" href="https://ray-eldath.me/programming/deep-dive-in-6824/#LeaseRead-with-noop">博客</a>实现，大佬太强了:)<br>
+由于读请求无需修改kv database，只需要简单的访问数据库返回数据即可，再向Raft层传输命令log进行同步操作花费太大，因此有许多方法进行优化，常见如下：</p>
+<ul>
+<li>LogRead</li>
+<li>ReadIndex</li>
+<li>LeaseRead</li>
+<li>FollowerRead</li>
+</ul>
+<p>这里采用了LeaseRead的方式进行优化，即在优化后，每个leader在每一轮获得多数心跳返回后，设定一个租约lease，过期时间是发起这轮心跳开始的时间+一个固定时LeaseDuration，需要保证Leader在租约过期之前不会换主（LeaseDuration &lt; ElectionTimeout），同时租约过期后本Leader不应该继续服务。<br>
+一个 Leader 在上任前会提交一个 noop，这可能会导致此前还未提交的条目被提交并应用。在这一过程中不能服务任何请求（包括只读请求），因为这中间的状态不能被外界观察到。我们可以通过引入一个额外的 leaseSyncing 状态并修改 GetState 的语义来实现这点限制：isleader = rf.state == Leader &amp;&amp; !rf.leaseSyncing &amp;&amp; time.Now().Before(rf.leaseEndAt)。leaseSyncing 在节点转为 Leader 并提交 noop 时置为 true，并仅当 commitIndex &gt;= lastApplied 才关闭 leaseSyncing。<br>
+在客户端调用Get时，判断当前rf的状态，如果rf.state == Leader &amp;&amp; !rf.leaseSyncing &amp;&amp; time.Now().Before(rf.leaseEndAt)，则可以直接返回kv数据库中的value，无需日志同步，因此实现了read only优化。</p>
+<h1>参考内容 &amp;&amp; 致谢</h1>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://ray-eldath.me/programming/deep-dive-in-6824/">主要参考 Ray-eldath的博客</a></li>
+<li><a target="_blank" rel="noopener" href="http://nil.csail.mit.edu/6.824/2021/labs/lab-shard.html">lab-shard</a></li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/464097239">mit-6.824 2021 Lab4：ShardKV</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.cnblogs.com/pxlsdz/p/15685837.html">pxlsdz的博客</a></li>
+<li><a target="_blank" rel="noopener" href="https://sworduo.github.io/2019/08/16/MIT6-824-lab4-shardKV/">sworduo的博客</a></li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/576761750">mit 6.824-2021-lab4B 总体认识和实验记录</a></li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/463140808">一致性模型与共识算法</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.inlighting.org/archives/mit-6-824-notes">2021 MIT 6.824 札记</a></li>
+</ul>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta">文章作者: </span><span class="post-copyright-info"><a href="https://penpenf28.github.io">Hongwen Xin</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta">文章链接: </span><span class="post-copyright-info"><a href="https://penpenf28.github.io/2023/11/10/MIT6-824-2021-Lab4-Sharded-KV-Service/">https://penpenf28.github.io/2023/11/10/MIT6-824-2021-Lab4-Sharded-KV-Service/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta">版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来自 <a href="https://penpenf28.github.io" target="_blank">Hongwen Xin's Blog</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/MIT6-824/">MIT6.824</a><a class="post-meta__tags" href="/tags/Distributed-System/">Distributed System</a><a class="post-meta__tags" href="/tags/Go/">Go</a></div><div class="post_share"><div class="social-share" data-image="https://s2.loli.net/2023/11/10/Xeo13Lbj6wGyxfI.png" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><div class="next-post pull-full"><a href="/2023/11/06/GPU%E7%9B%B8%E5%85%B3/" title="GPU相关"><img class="cover" src="https://s2.loli.net/2023/11/07/gdaKZPk2WcbsEiF.png" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="pagination-info"><div class="label">下一篇</div><div class="next_info">GPU相关</div></div></a></div></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><div><a href="/2023/07/10/MIT6-824-2020-Lab1-MapReduce/" title="MIT6.824 2020 Lab1 MapReduce"><img class="cover" src="https://s2.loli.net/2023/08/25/KukRhlxeP3LHc17.png" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2023-07-10</div><div class="title">MIT6.824 2020 Lab1 MapReduce</div></div></a></div><div><a href="/2023/10/12/MIT6-824-2021-Lab2-Raft-Part-2C-2D/" title="MIT6-824-2021-Lab2-Raft-Part-2C&amp;&amp;2D"><img class="cover" src="https://s2.loli.net/2023/10/12/KWudP68e9i7HGgz.png" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2023-10-12</div><div class="title">MIT6-824-2021-Lab2-Raft-Part-2C&amp;&amp;2D</div></div></a></div><div><a href="/2023/07/21/MIT6-824-2020-Lab2-Raft-Part-2A/" title="MIT6.824 2020 Lab2 Raft Part 2A"><img class="cover" src="https://s2.loli.net/2023/08/25/1GTMw8pVeWNcoFn.png" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2023-07-21</div><div class="title">MIT6.824 2020 Lab2 Raft Part 2A</div></div></a></div><div><a href="/2023/10/10/MIT6-824-2021-Lab2-Raft-Part-2B/" title="MIT6-824-2021-Lab2-Raft-Part-2B"><img class="cover" src="https://s2.loli.net/2023/10/10/BFrMXAq6oO9PhH7.png" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2023-10-10</div><div class="title">MIT6-824-2021-Lab2-Raft-Part-2B</div></div></a></div><div><a href="/2023/10/19/MIT6-824-2021-Lab3-KV-Raft/" title="MIT6-824-2021-Lab3-KV-Raft"><img class="cover" src="https://s2.loli.net/2023/10/19/hvYMtp7Wm9BEGST.png" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2023-10-19</div><div class="title">MIT6-824-2021-Lab3-KV-Raft</div></div></a></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info"><div class="is-center"><div class="avatar-img"><img src="https://s2.loli.net/2023/08/25/qk9Z1MsX3yHw6FJ.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info__name">Hongwen Xin</div><div class="author-info__description"></div></div><div class="card-info-data site-data is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">13</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">9</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/penPenf28"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons is-center"><a class="social-icon" href="mailto:penpenf28@163.com" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">This is my Blog</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link"><span class="toc-number">1.</span> <span class="toc-text">Part 4A</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E9%AA%8C%E8%AF%B4%E6%98%8E"><span class="toc-number">1.1.</span> <span class="toc-text">实验说明</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%BE%E8%AE%A1%E6%A6%82%E8%BF%B0"><span class="toc-number">1.2.</span> <span class="toc-text">设计概述</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Move"><span class="toc-number">1.2.1.</span> <span class="toc-text">Move</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Join"><span class="toc-number">1.2.2.</span> <span class="toc-text">Join</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Leave"><span class="toc-number">1.2.3.</span> <span class="toc-text">Leave</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Rebalance"><span class="toc-number">1.2.4.</span> <span class="toc-text">Rebalance</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Query"><span class="toc-number">1.2.5.</span> <span class="toc-text">Query</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Code-Details"><span class="toc-number">1.3.</span> <span class="toc-text">Code Details</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link"><span class="toc-number">2.</span> <span class="toc-text">Part 4B</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E9%AA%8C%E8%AF%B4%E6%98%8E-2"><span class="toc-number">2.1.</span> <span class="toc-text">实验说明</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%BE%E8%AE%A1%E6%A6%82%E8%BF%B0-2"><span class="toc-number">2.2.</span> <span class="toc-text">设计概述</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Clerk"><span class="toc-number">2.2.1.</span> <span class="toc-text">Clerk</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Server"><span class="toc-number">2.2.2.</span> <span class="toc-text">Server</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Snapshot"><span class="toc-number">2.2.3.</span> <span class="toc-text">Snapshot</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link"><span class="toc-number">3.</span> <span class="toc-text">Challenge</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Garbage-collection-of-state"><span class="toc-number">3.1.</span> <span class="toc-text">Garbage collection of state</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Client-requests-during-configuration-changes"><span class="toc-number">3.2.</span> <span class="toc-text">Client requests during configuration changes</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Q1-%E5%88%86%E7%89%87%E7%8A%B6%E6%80%81"><span class="toc-number">3.2.0.1.</span> <span class="toc-text">Q1 分片状态</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Q2-RPC%E6%B6%88%E6%81%AF"><span class="toc-number">3.2.0.2.</span> <span class="toc-text">Q2 RPC消息</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Q3-%E6%8C%81%E4%B9%85%E5%8C%96"><span class="toc-number">3.2.0.3.</span> <span class="toc-text">Q3 持久化</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E5%9C%BA%E6%99%AF"><span class="toc-number">3.2.0.4.</span> <span class="toc-text">问题场景</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Command%E5%8E%BB%E9%87%8D"><span class="toc-number">3.2.0.5.</span> <span class="toc-text">Command去重</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#LeaseRead-with-noop"><span class="toc-number">3.3.</span> <span class="toc-text">LeaseRead with noop</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link"><span class="toc-number">4.</span> <span class="toc-text">参考内容 &amp;&amp; 致谢</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/2023/11/10/MIT6-824-2021-Lab4-Sharded-KV-Service/" title="MIT6.824 2021 Lab4 Sharded KV Service"><img src="https://s2.loli.net/2023/11/10/Xeo13Lbj6wGyxfI.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="MIT6.824 2021 Lab4 Sharded KV Service"/></a><div class="content"><a class="title" href="/2023/11/10/MIT6-824-2021-Lab4-Sharded-KV-Service/" title="MIT6.824 2021 Lab4 Sharded KV Service">MIT6.824 2021 Lab4 Sharded KV Service</a><time datetime="2023-11-10T03:09:09.000Z" title="发表于 2023-11-10 11:09:09">2023-11-10</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2023/11/06/GPU%E7%9B%B8%E5%85%B3/" title="GPU相关"><img src="https://s2.loli.net/2023/11/07/gdaKZPk2WcbsEiF.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="GPU相关"/></a><div class="content"><a class="title" href="/2023/11/06/GPU%E7%9B%B8%E5%85%B3/" title="GPU相关">GPU相关</a><time datetime="2023-11-06T03:31:36.000Z" title="发表于 2023-11-06 11:31:36">2023-11-06</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2023/10/25/Batch-Normalization%E5%92%8CLayer-Normalization/" title="Batch Normalization和Layer Normalization"><img src="https://s2.loli.net/2023/11/03/n2YZPmBfuCx6l7t.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Batch Normalization和Layer Normalization"/></a><div class="content"><a class="title" href="/2023/10/25/Batch-Normalization%E5%92%8CLayer-Normalization/" title="Batch Normalization和Layer Normalization">Batch Normalization和Layer Normalization</a><time datetime="2023-10-25T02:38:39.000Z" title="发表于 2023-10-25 10:38:39">2023-10-25</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2023/10/19/MIT6-824-2021-Lab3-KV-Raft/" title="MIT6-824-2021-Lab3-KV-Raft"><img src="https://s2.loli.net/2023/10/19/hvYMtp7Wm9BEGST.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="MIT6-824-2021-Lab3-KV-Raft"/></a><div class="content"><a class="title" href="/2023/10/19/MIT6-824-2021-Lab3-KV-Raft/" title="MIT6-824-2021-Lab3-KV-Raft">MIT6-824-2021-Lab3-KV-Raft</a><time datetime="2023-10-19T02:41:53.000Z" title="发表于 2023-10-19 10:41:53">2023-10-19</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2023/10/16/%E5%9B%BE%E7%A5%9E%E7%BB%8F%E7%BD%91%E7%BB%9C%E6%9E%81%E7%AE%80%E6%80%BB%E7%BB%93/" title="图神经网络极简总结"><img src="https://s2.loli.net/2023/10/16/cSXNCgnVrRxZdp5.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="图神经网络极简总结"/></a><div class="content"><a class="title" href="/2023/10/16/%E5%9B%BE%E7%A5%9E%E7%BB%8F%E7%BD%91%E7%BB%9C%E6%9E%81%E7%AE%80%E6%80%BB%E7%BB%93/" title="图神经网络极简总结">图神经网络极简总结</a><time datetime="2023-10-16T12:41:42.000Z" title="发表于 2023-10-16 20:41:42">2023-10-16</time></div></div></div></div></div></div></main><footer id="footer" style="background-image: url('/img/bottom_compressed.jpg')"><div id="footer-wrap"><div class="copyright">&copy;2023 By Hongwen Xin</div><div class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly</a></div><div class="footer_custom_text">Hi, :)</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="浅色和深色模式转换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside_config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.umd.min.js"></script><div class="js-pjax"></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
